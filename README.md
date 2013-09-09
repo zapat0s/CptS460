@@ -1,4 +1,7 @@
 CptS460
 =======
 
-Code for my CptS460 class
+Projects from my CptS460 class.
+
+
+DO NOT USE THIS CODE TO CHEAT. This is a reference only.

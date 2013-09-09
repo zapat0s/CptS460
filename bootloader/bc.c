@@ -14,6 +14,7 @@ typedef struct ext2_dir_entry_2 DIR;
 char kstr[16];
 char buf1[BLK], buf2[BLK];
 
+// Prints a char* string
 int prints(char *s)
 {
 	while(*s)
@@ -22,6 +23,7 @@ int prints(char *s)
 	}
 }
 
+// Stores keystrokes into s until '\r' is encountered (enter key)
 int gets(char *s)
 {
 	char c;
@@ -33,11 +35,15 @@ int gets(char *s)
 	*s = 0;
 }
 
+// Gets block from disk and writes it to ES + buf
 u16 getblk(u16 blk, char *buf)
 {
 	readfd( blk/18, ((blk*2)%36)/18, ((blk*2)%36)%18, buf);
 }
 
+// Given the number of a block containing directory entries,
+// finds inode of file with specified name.
+// Uses buf2
 u16 findentry(u16 block, char* name)
 {
 	char *c;
@@ -60,6 +66,8 @@ u16 findentry(u16 block, char* name)
 	}
 }
 
+// Returns pointer to inode.
+// Uses buf1
 INODE *getinode(u16 iblk, u16 inode)
 {
 	u16 block, idx;
