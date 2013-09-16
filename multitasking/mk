@@ -12,4 +12,4 @@ echo done
 
 #  Use YOUR MTX booter of LAB#1 to boot up MTX
 
-
+qemu -fda mtximage -no-fd-bootchk
