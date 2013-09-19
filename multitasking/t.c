@@ -4,9 +4,10 @@
 #define NPROC     9        
 #define SSIZE  1024                /* kstack int size */
 
-#define DEAD      0                /* proc status     */
-#define FREE      2 
-#define READY     1      
+#define FREE      0                /* proc status     */
+#define DEAD      1
+#define READY     2 
+#define SLEEP     3      
 
 typedef struct proc
 {
@@ -15,14 +16,16 @@ typedef struct proc
 	int  pid;
 	int  ppid;
 	struct proc *parentPtr;
-	int  status;		/* READY|DEAD, etc */
-	int  kstack[SSIZE];	// kmode stack of task
+	int  status;		/* FREE|DEAD|READY|SLEEP, etc */
+	int  event;
+	int  exitValue;
 	int  priority;
-}PROC;
+	int  kstack[SSIZE];	// kmode stack of task
+	}PROC;
 
 //#include "io.c"  /* <===== use YOUR OWN io.c with printf() ****/
 
-PROC proc[NPROC], *running, *free, *ready;
+PROC proc[NPROC], *running, *freeQueue, *readyQueue, *sleepQueue;
 
 int  procSize = sizeof(PROC);
 
@@ -43,6 +46,7 @@ int  procSize = sizeof(PROC);
 int body();  
 int enqueue(PROC *p, PROC **queue);
 PROC *dequeue(PROC **queue);
+int wait(int *status);
 
 
 int initialize()
@@ -50,13 +54,16 @@ int initialize()
 	int i, j;
 	PROC *p;
 
-	ready = 0;
+	readyQueue = NULL;
+	sleepQueue = NULL;
 
 	for(i = 0; i < NPROC; i++)
 	{
 		p = &proc[i];
 		p->next = &proc[i+1];
 		p->pid = i;
+		p->ppid = -1;
+		p->parentPtr = NULL;
 		p->status = READY;
     
 		if(i)
@@ -75,9 +82,9 @@ int initialize()
 	running->priority = 0;
 	running->status = READY;
 
-	free = &proc[1];
+	freeQueue = &proc[1];
 
-	if(!enqueue(running, &ready))
+	if(!enqueue(running, &readyQueue))
 	{
 		printf("Epic fail adding to ready\n");
 		return -1;
@@ -94,13 +101,34 @@ char *gasp[NPROC]=
 	"Bye! Bye! Crule World...............",      
 };
 
-int grave()
+int kexit()
 {
+	int i, parent;
+
+	// P1 cannot die
+	if(running->pid == 1)
+	{
+		printf("You cannot kill me I am P1!\n");
+		return 1;
+	}
+
 	printf("\n*****************************************\n"); 
 	printf("Task %d %s\n", running->pid,gasp[(running->pid) % 4]);
 	printf("*****************************************\n");
 	running->status = DEAD;
 
+	parent = (int)running->parentPtr;
+
+	// Give children to P1
+	for(i = 0; i < NPROC; i++)
+	{
+		if(proc[i].ppid == running->pid)
+		{
+			proc[i].ppid = 1;
+		}
+	}
+	// Wake Parent
+	wakeup(parent);
 	tswitch();   /* journey of no return */        
 }
 
@@ -110,27 +138,44 @@ int ps()
 
 	printf("running = %d\n", running->pid);
 
-	p = ready;
+	p = readyQueue;
 	printf("readyProcs = ");
-	printQueue(ready);
+	printQueue(readyQueue);
+	printf("\n");
+	printf("sleepingProcs = ");
+	printQueue(sleepQueue);
 	printf("\n");
 }
 
 int body()
 {
 	char c;
+	int  s;
 	
 	while(1)
 	{
 		ps();
 		printf("I am Proc %d in body()\n", running->pid);
-		printf("Input a char : [s|q|f]\n");
+		printf("Input a char : [s|q|f|w|l|u]\n");
 		c=getc();
 		switch(c)
 		{
 			case 's': tswitch(); break;
-			case 'q': grave();   break;
+			case 'q': kexit();   break;
 			case 'f': kfork();   break;
+			case 'w': wait(&s);  break;
+			case 'l': printf("Enter event: ");
+					  c = getc();
+					  putc(c);
+					  printf("\n");
+					  s = c - '0';
+					  sleep(s);  break;
+			case 'u': printf("Enter event: ");
+					  c = getc();
+					  putc(c);
+					  printf("\n");
+					  s = c - '0';
+					  wakeup(s); break;
 			default :            break;  
 		}
 	}
@@ -154,9 +199,9 @@ int scheduler()
 	PROC *p;
 	
 	if (running->status == READY)
-		enqueue(running, &ready);
+		enqueue(running, &readyQueue);
 	
-	running = dequeue(&ready);
+	running = dequeue(&readyQueue);
 
 	printf("\n-----------------------------\n");
 	printf("next running proc = %d\n", running->pid);
@@ -165,14 +210,7 @@ int scheduler()
 
 PROC *getproc()
 {
-	return dequeue(&free);
-}
-
-int freeproc(PROC *p)
-{
-	p->ppid = 0;
-	p->status = DEAD;
-	p->priority = 0;
+	return dequeue(&freeQueue);
 }
 
 int kfork()
@@ -188,6 +226,7 @@ int kfork()
 	printf("%d", p->pid);
 	
 	p->ppid = running->pid;
+	p->parentPtr = running;
 
 	// setup kstack[]
 	for (i = 1; i < 10; i++)
@@ -199,7 +238,7 @@ int kfork()
 	p->status = READY;
 	p->priority = 2;
 
-	if(!enqueue(p, &ready))
+	if(!enqueue(p, &readyQueue))
 		return -1;
 
 	return p->pid;
@@ -212,7 +251,7 @@ int enqueue(PROC *p, PROC **queue)
 	if(!*queue)
 	{
 		*queue = p;
-		ready->next = NULL;
+		(*queue)->next = NULL;
 		return 1;	
 	}
 
@@ -220,7 +259,6 @@ int enqueue(PROC *p, PROC **queue)
 	{
 		p->next = *queue;
 		*queue = p;
-
 		return 1;
 	}
 
@@ -243,7 +281,6 @@ int enqueue(PROC *p, PROC **queue)
 				return 1;
 			}
 		}
-
 		cur = cur->next;
 	}
 
@@ -260,7 +297,6 @@ PROC *dequeue(PROC **queue)
 		return ret;
 	}
 	return NULL;
-
 }
 
 int printQueue(PROC *queue)
@@ -270,5 +306,55 @@ int printQueue(PROC *queue)
 		printf("%d -> ", queue->pid);
 		queue = queue->next;
 	}
+}
 
+int wait(int *status)
+{
+	int i;
+	int c;
+	// Find children
+	for(i = 0, c = 0; i < NPROC; i++)
+	{
+		if(proc[i].ppid == running->pid && proc[i].status != FREE)
+			c++;
+
+		if(proc[i].status == DEAD && proc[i].ppid == running->pid)
+		{
+			*status = proc[i].exitValue;
+			proc[i].status = FREE;
+			return proc[i].pid;
+		}
+	}
+	if(c > 0)
+		sleep(running);
+}
+
+int sleep(int event)
+{
+	running->event = event;
+	running->status = SLEEP;
+	if(!enqueue(running, &sleepQueue))
+		return -1;
+	tswitch();	
+}
+
+int wakeup(int event)
+{
+	PROC **cur, *tar;
+	cur = &sleepQueue;
+
+	while(*cur)
+	{
+		if((*cur)->status == SLEEP && (*cur)->event == event)
+		{
+			(*cur)->status = READY;
+			tar = *cur;
+			*cur = (*cur)->next;
+			if(!enqueue(tar, &readyQueue))
+				return -1;
+		}
+		else
+			cur = &(*cur)->next;
+
+	}
 }
