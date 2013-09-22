@@ -10,6 +10,3 @@ main()
 		printf("c=%c\n", c);
 	}
 }
-
-
-

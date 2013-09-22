@@ -59,7 +59,10 @@ int do_tswitch(){ }
 int do_kfork(){ }
 int do_wait(){ }
 int do_exit(){ }
-int do_ps(){ }
+int do_ps()
+{
+	printf("PS Biach!");
+}
 int kmode(){ }
 int chname(){ }
 
@@ -67,7 +70,7 @@ int init()
 {
 	PROC *p; int i;
 	printf("init ....");
-	for (i=0; i<NPROC; i++)
+	for (i = 0; i < NPROC; i++)
 	{   // initialize all procs
 		p = &proc[i];
 		p->pid = i;
@@ -93,7 +96,7 @@ int init()
 
 int int80h();
 
-int set_vec(u16 vector, u16 handler)
+u16 set_vec(u16 vector, u16 handler)
 {
 	// put_word(word, segment, offset) in mtxlib
 	put_word(handler, 0, vector<<2);
@@ -104,7 +107,7 @@ main()
 {
 	printf("MTX starts in main()\n");
 	init();      // initialize and create P0 as running
-	set_vec(80, int80h);
+	set_vec(80, (u16)int80h);
 
 	kfork("/bin/u1");     // P0 kfork() P1
 
@@ -161,7 +164,7 @@ int kfork(char *filename)
 	/*** get a PROC for child process: ***/
 	if ( (p = get_proc(&freeList)) == 0){
 		printf("no more proc\n");
-		return(-1);
+		return -1;
 	}
 
 	/* initialize the new proc and its stack */
@@ -182,6 +185,11 @@ int kfork(char *filename)
                                     PROC.ksp ---|
 
 	******************************************************************/
+	for(i = 0; i < 10; i++)
+		p->kstack[SSIZE - i] = 0;
+	p->kstack[SSIZE - 1] = (u16)body;
+	p->ksp = &(p->kstack[SSIZE - 9]);
+		
 	enqueue(&readyQueue, p);
 
 	// make Umode image by loading /bin/u1 into segment
@@ -199,6 +207,16 @@ int kfork(char *filename)
     PROC.uss = segment;           PROC.usp ----------|
  
 	***********************************************************/
+
+	for(i = 1; i < 11; i++)
+		put_word(0, segment, -i << 2); 
+	put_word(0x0200, segment, -1 << 2);
+	put_word(segment, segment, -2 << 2);
+	put_word(segment, segment, -11 << 2);
+	put_word(segment, segment, -12 << 2);
+	proc->usp = -12 << 2;
+	proc->uss = segment;
+
 	printf("Proc%d forked a child %d segment=%x\n", running->pid,p->pid,segment);
 	return(p->pid);
 }
