@@ -1,0 +1,17 @@
+bcc -c  u2.c
+as86 -o u.o u.s
+ld86 u.o u2.o /usr/lib/bcc/libc.a
+
+mount /dev/fd0 /fd0
+cp a.out /fd0/u2
+cp a.out /fd0/bin/u2
+umount /dev/fd0
+
+#mount -o loop /root/dosemu/mtximage A
+#cp a.out A/u2
+#cp a.out A/sys/u2
+#umount A
+
+rm *.o a.out
+
+echo done u2
