@@ -1,12 +1,12 @@
 // ucode.c file
 
-char *cmd[]={"getpid", "ps", "chname", "kmode", "switch", "wait", "exit", 0};
+char *cmd[]={"getpid", "ps", "chname", "kmode", "switch", "wait", "exit", "fork", "exec", 0};
 
 int show_menu()
 {
-   printf("***************** Menu *******************\n");
-   printf("*  ps  chname  kmode  switch  wait  exit *\n");
-   printf("******************************************\n");
+   printf("***************** Menu *******************************\n");
+   printf("*  ps  chname  kmode  switch  wait  exit  fork  exec *\n");
+   printf("******************************************************\n");
 }
 
 int find_cmd(name) char *name;
@@ -56,6 +56,25 @@ int kswitch()
         syscall(4,0,0);
     printf("proc %d back from Kernel\n", getpid());
 }
+
+int fork()
+{
+	int child;
+	printf("proc %d enter Kernel to switch proc\n", getpid());
+	child = syscall(7, 0, 0);
+	printf("proc %d back from Kernel\n", getpid());
+	printf("this is proc %d and %d was just forked\n", getpid(), child);
+	return child;
+}
+
+int exec()
+{
+	char s[64];
+	printf("input filename now: ");
+	gets(s);
+	printf("%d", &s);
+	syscall(8, s, 0);	
+}	
 
 int wait()
 {

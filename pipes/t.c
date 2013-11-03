@@ -38,6 +38,9 @@ typedef struct proc{
 *******************************/
 
 PROC proc[NPROC], *running, *freeList, *readyQueue, *sleepList;
+PIPE pipe[NPIPE];
+OFTE oft[NOFTES];
+
 int procSize = sizeof(PROC);
 int nproc = 0;
 
@@ -91,6 +94,24 @@ int do_fork()
 		p->kstack[SSIZE - i] = 0;
 	p->kstack[SSIZE - 1] = (u16)goUmode;
 	p->ksp = &(p->kstack[SSIZE - 9]);
+
+	// copy file descriptors	
+	for(i = 0; i < NFD; i++)
+	{
+		p->fd[i] = p->parent->fd[i];
+		if(p->fd[i])
+		{
+			p->fd[i]->refCount++;
+			if(p->fd[i]->mode == READ_PIPE)
+			{
+				p->fd[i]->pipePtr->nreader++;
+			}
+			if(p->fd[i]->mode == WRITE_PIPE)
+			{
+				p->fd[i]->pipePtr->nwriter++;
+			}
+		}
+	}
 		
 	enqueue(&readyQueue, p);
 	
@@ -175,6 +196,8 @@ int do_exit(int val)
 {
 	kexit(val);	
 }
+
+
 int do_ps()
 {
 	int i;
@@ -209,10 +232,12 @@ int do_ps()
 		printf("%s\n", proc[i].name);
 	}
 }
+
 int kmode()
 {
 	body();
 }
+
 int chname(int offset)
 {
 	int i;
@@ -226,10 +251,56 @@ int chname(int offset)
 	return 1;
 }
 
+int do_pipe(int loc)
+{
+	int fds[2];
+	int ret;
+
+	ret = kpipe(fds);
+
+	put_word(fds[0], running->uss, loc);
+	put_word(fds[1], running->uss, loc + 2);
+
+	return ret;
+}
+
+int do_read(int fd, int loc, int bytes)
+{
+	char buf[128]; 
+	int i, ret;
+
+	ret = readPipe(fd, buf, bytes);
+
+	for(i = 0; i < bytes; i++)
+	{
+		put_byte(buf[i], running->uss, loc + i);
+	}
+
+	return ret;
+}
+
+int do_write(int fd, int loc, int bytes)
+{
+	char buf[128];
+	int i;
+
+	for(i = 0; i < bytes; i++)
+	{
+		buf[i] = get_byte(running->uss, loc + i);
+	}
+
+	return writePipe(fd, buf, bytes);
+}
+
+int do_close(int fd)
+{
+	return closePipe(fd);
+}
+
 int init()
 {
 	PROC *p;
-	int i;
+	int i, j;
 	printf("init ....");
 	for (i = 0; i < NPROC; i++)
 	{   // initialize all procs
@@ -240,11 +311,28 @@ int init()
 		strcpy(proc[i].name, pname[i]);
 
 		p->next = &proc[i+1];
+
+		for(j = 0; j < NFD; j++)
+		{
+			p->fd[j] = NULL;
+		}
 	}
 	freeList = &proc[0];      // all procs are in freeList
 	proc[NPROC - 1].next = 0;
 
 	readyQueue = sleepList = 0;
+
+	// initialize all pipes
+	for(i = 0; i < NPIPE; i++)
+	{
+		pipe[i].head = 0;
+		pipe[i].tail = 0;
+		pipe[i].data = 0;
+		pipe[i].room = PSIZE;
+		pipe[i].nreader = 0;
+		pipe[i].nwriter = 0;
+		pipe[i].busy = 0;
+	}
 
 	/**** create P0 as running ******/
 	p = get_proc(&freeList);
@@ -308,8 +396,8 @@ int body()
 		{
 			case 's' : do_tswitch();   break;
 			case 'f' : do_kfork();     break;
-			case 'w' : do_wait();      break;
-			case 'q' : do_exit();      break;
+			case 'w' : do_wait(NULL);      break;
+			case 'q' : do_exit(NULL);      break;
 
 			case 'u' : goUmode();      break;
 		}
@@ -350,7 +438,25 @@ int kfork(char *filename)
 		p->kstack[SSIZE - i] = 0;
 	p->kstack[SSIZE - 1] = (u16)body;
 	p->ksp = &(p->kstack[SSIZE - 9]);
-		
+
+	// copy file descriptors	
+	for(i = 0; i < NFD; i++)
+	{
+		p->fd[i] = p->parent->fd[i];
+		if(p->fd[i])
+		{
+			p->fd[i]->refCount++;
+			if(p->fd[i]->mode == READ_PIPE)
+			{
+				p->fd[i]->pipePtr->nreader++;
+			}
+			if(p->fd[i]->mode == WRITE_PIPE)
+			{
+				p->fd[i]->pipePtr->nwriter++;
+			}
+		}
+	}
+
 	enqueue(&readyQueue, p);
 
 	// make Umode image by loading /bin/u1 into segment
@@ -371,6 +477,7 @@ int kfork(char *filename)
 	offset = 0x1000;
 	for(i = 1; i < 11; i++)
 		put_word(0, segment, 0x1000 - (i * 2) ); 
+	
 	put_word(0x0200, segment, 0x1000 - 2);
 	put_word(segment, segment, 0x1000 - 4);
 	put_word(segment, segment, 0x1000 - 22);
@@ -380,6 +487,270 @@ int kfork(char *filename)
 
 	printf("Proc%d forked a child %d segment=%x\n", running->pid,p->pid,segment);
 	return(p->pid);
+}
+
+int kpipe(int pd[2])
+{
+	int fd1, fd2, of1, of2, p;
+	// find empty fd entries
+	for(fd1 = 0; fd1 < NFD; fd1++)
+	{
+		if(!running->fd[fd1])
+			break;
+	}
+	if(running->fd[fd1])
+		return -1;
+
+	for(fd2 = fd1 + 1; fd2 < NFD; fd2++)
+	{
+		if(!running->fd[fd2])
+			break;
+	}
+
+	if(fd2 >= NFD)
+		return -1;
+
+	if(running->fd[fd2])
+		return -1;
+
+	// find empty oft entries
+	for(of1 = 0; of1 < NOFTES; of1++)
+	{
+		if(oft[of1].refCount == 0)
+			break;
+	}
+
+	if(oft[of1].refCount != 0)
+		return -1;
+
+	for(of2 = of1 + 1; of2 < NOFTES; of2++)
+	{
+		if(oft[of2].refCount == 0)
+			break;
+	}
+	
+	if(of2 >= NFD)
+		return -1;
+
+	if(oft[of2].refCount != 0)
+		return -1;
+
+	// find empty pipe entry
+	for(p = 0; p < NPIPE; p++)
+	{
+		if(pipe[p].nreader == 0 && pipe[p].nwriter == 0)
+			break;
+	}
+
+	if(pipe[p].nreader != 0 || pipe[p].nwriter != 0)
+		return -1;
+
+	// create pipe entry
+	pipe[p].head = 0;
+	pipe[p].tail = 0;
+	pipe[p].data = 0;
+	pipe[p].room = PSIZE;
+	pipe[p].busy = false;
+	pipe[p].nreader++;
+	pipe[p].nwriter++;
+
+	// create oft entries
+	oft[of1].mode = READ_PIPE;
+	oft[of1].refCount++;
+	oft[of1].pipePtr = &(pipe[p]);
+
+	oft[of2].mode = WRITE_PIPE;
+	oft[of2].refCount++;
+	oft[of2].pipePtr = &(pipe[p]);
+
+	// create fd entries
+	running->fd[fd1] = &(oft[of1]);
+	running->fd[fd2] = &(oft[of2]);
+
+	// populate pd array
+	pd[0] = fd1;
+	pd[1] = fd2;
+
+	return true;
+}
+
+int closePipe(int fd)
+{
+	OFTE *op; PIPE *pp;
+
+	printf("proc %d close_pipe: fd=%d\n", running->pid, fd);
+	
+	op = running->fd[fd];
+
+	if(running->fd[fd] == NULL)				// return if fd already empty
+		return 1;
+
+	running->fd[fd] = NULL;                 // clear fd[fd] entry 
+
+	if (op->mode == READ_PIPE)
+	{
+		pp = op->pipePtr;
+		pp->nreader--;                   // dec n reader by 1
+
+		if (--op->refCount == 0)
+		{        // last reader
+			if (pp->nwriter <= 0)
+			{         // no more writers
+				pp->busy = 0;             // free the pipe   
+				return 1;
+			}
+		}
+		wakeup(&pp->room); 
+		return 1;
+	}
+
+	if (op->mode == WRITE_PIPE)
+	{
+		pp = op->pipePtr;
+		pp->nwriter--;                   // dec nwriter by 1
+
+		if (--op->refCount == 0)
+		{        // last writer 
+			if (pp->nreader <= 0)
+			{         // no more readers 
+				pp->busy = 0;              // free pipe also 
+				return 1;
+			}
+		}
+		wakeup(&pp->data);
+		return 1;
+	}
+}
+
+int readPipe(int fd, char *buf, int n)
+{
+	u16 loc, count;
+	PIPE *pipePtr;
+
+	showPipe(fd);
+
+	// does fd exist
+	if(!running->fd[fd])
+		return -1;
+
+	// is fd readable?
+	if(running->fd[fd]->mode != READ_PIPE)
+		return -1;
+
+	// read data
+	pipePtr = running->fd[fd]->pipePtr;
+	loc = 0;
+
+	for(count = 0; count < n; count++)
+	{
+		printf("%d bytes read\n", count);
+		while(pipePtr->data <= 0)
+		{
+			printf("i should sleep here");
+			wakeup(&(pipePtr->room));
+			sleep(&(pipePtr->data));
+		}
+
+		if(pipePtr->tail >= PSIZE)
+			pipePtr->tail = 0;
+		buf[loc] = pipePtr->buf[pipePtr->tail];
+		pipePtr->data--;
+		pipePtr->tail++;
+		pipePtr->room++;
+		loc++;
+
+		if(pipePtr->nwriter <= 0 && pipePtr->data <= 0)
+			break;
+	}
+
+	wakeup(&(pipePtr->room));
+
+	return count;
+}
+
+int writePipe(int fd, char *buf, int n)
+{
+	u16 loc, count;
+	PIPE *pipePtr;
+
+	// does fd exist
+	if(!running->fd[fd])
+		return -1;
+
+	// is fd writable?
+	if(running->fd[fd]->mode != WRITE_PIPE)
+		return -1;
+
+	// write data
+	pipePtr = running->fd[fd]->pipePtr;
+	loc = 0;
+	count = 0;
+	for(count = 0; count < n; count++)
+	{
+		while(pipePtr->room <= 0)
+		{
+			wakeup(&(pipePtr->data));
+			sleep(&(pipePtr->room));
+		}
+
+		if(pipePtr->nreader <= 0 )
+			break;
+		
+		if(pipePtr->head >= PSIZE)
+			pipePtr->head = 0;
+		
+		pipePtr->buf[pipePtr->head] = buf[loc];
+		pipePtr->room--;
+		pipePtr->data++;
+		pipePtr->head++;
+		loc++;
+
+	}
+
+	showPipe(fd);
+
+	wakeup(&(pipePtr->data));
+
+	return count;
+}
+
+int showPipe(int fd)
+{
+	int i, j;
+	PIPE *pipe = running->fd[fd]->pipePtr;
+	printf("-------------- PIPE DATA --------------\n");     
+	printf("readers: %d\t writers: %d\n", pipe->nreader, pipe->nwriter);
+	printf("data: %d\t room: %d\n", pipe->data, pipe->room);
+	printf("-------------PIPE CONTENTS ------------\n");
+	for(i = 0; i < PSIZE; i++)
+	{
+		putc(pipe->buf[i]);
+	}
+	printf("\n-------------------------------------\n");
+}
+
+int printfd()
+{
+	int i;
+	printf("File Descriptor Status\nFID MODE       REF COUNT\n");
+	for(i = 0; i < NFD; i++)
+	{
+		printf("%d  ", i);
+		switch(running->fd[i]->mode)
+		{
+			case READ_PIPE:
+				printf("READ PIPE  ");
+				break;
+			case WRITE_PIPE:
+				printf("WRITE PIPE ");
+				break;	
+			default:
+				printf("UNKNOWN    ");
+				break;
+		}
+		printf("%d\n", running->fd[i]->refCount);
+	}
+
 }
 
 int sleep(int event)
@@ -435,6 +806,11 @@ int kexit(int val)
 		}
 	}
 
+	for(i = 0; i < NFD; i++)
+	{
+		closePipe(i);
+	}
+
 	wakeup((int)running->parent);
 	tswitch();
 }
@@ -478,9 +854,16 @@ int kcinth()
 		case 6 : r = do_exit(b);       break;
 		case 7 : r = do_fork();		   break;
 		case 8 : r = do_exec(b);	   break;
-       
-		case 90: r =  getc();          break;
-		case 91: r =  putc(b);         break;       
+        
+		case 80: r = do_pipe(b); 	   break;
+		case 81: r = do_read(b, c, d); break;
+		case 82: r = do_write(b, c, d);break;
+		case 83: r = do_close(b); 	   break;
+
+		case 84: r = printfd(); 	   break;
+
+		case 90: r = getc();           break;
+		case 91: r = putc(b);          break;       
 		case 99: do_exit(b);           break;
 		default: printf("invalid syscall # : %d\n", a); 
 	}

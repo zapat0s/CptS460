@@ -6,12 +6,11 @@ main()
 
   while(1){
     pid = getpid();
-    color = 0x000A + (pid % 6);
-       
+
     printf("----------------------------------------------\n");
     printf("I am proc %d in U mode: running segment=%x\n",getpid(), getcs());
     show_menu();
-    printf("Command ? ");
+    printf("> ");
     gets(name); 
     if (name[0]==0) 
         continue;
@@ -27,6 +26,11 @@ main()
            case 6 : exit();     break;
 		   case 7 : fork();		break;
 		   case 8 : exec();     break;
+		   case 9 : pipe();     break;
+		   case 10: read();     break;
+		   case 11: write();    break;
+		   case 12: close();    break;
+		   case 13: printfd();  break;
 
            default: invalid(name); break;
     }

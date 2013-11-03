@@ -9,7 +9,6 @@ main()
 	while(1)
 	{
 		pid = getpid();
-		color = 0x0000B + pid;
 
 		printf("==============================================\n");
 		printf("\nIch bin Prozess %d in der U Weise: das laufen im Segment=%x\n", getpid(), getcs());
@@ -31,6 +30,11 @@ main()
 			case 6 : exit();     break;
 			case 7 : fork();	 break;
 			case 8 : exec();     break;
+			case 9 : pipe();     break;
+		   	case 10: read();     break;
+		   	case 11: write();    break;
+		   	case 12: close();    break;
+		   	case 13: printfd();  break;
 
 			default: invalid(name); break;
 		}

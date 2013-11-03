@@ -5,9 +5,11 @@ VFD=../mtximage
 #umount /mnt
 
 echo --------------------- make $1 -----------------------
-bcc -c -ansi $1.c
+bcc -c -O -ansi $1.c
 as86 -o u.o u.s
-ld86 -o $1 u.o $1.o ../mtxlib /usr/lib/bcc/libc.a
+ld86 -o $1 -s u.o $1.o ../mtxlib /usr/lib/bcc/libc.a
+
+ls -l $1
 
 mount -o loop $VFD /mnt
 cp $1 /mnt/bin/$1
