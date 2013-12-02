@@ -1,0 +1,4 @@
+#!/bin/bash
+
+qemu -hda vdisk -m 520m -smp $1 -serial /dev/pts/2 -serial /dev/pts/3 \
+-localtime #-boot d
