@@ -10,13 +10,6 @@ void runCommand(char *pipetokens[], int pipecount, int pos)
 	char *inputtokens[128], *tok;
 	int tokencount = 0, pid, status, i, j, pipes[2];
 
-	/*for(i = 0; i < pipecount; i++)
-	{
-		printf("%s\n", pipetokens[i]);
-	}*/
-	
-	//getc();
-		
 	if(pipecount - pos > 0)
 	{
 		// Create pipe
@@ -31,7 +24,6 @@ void runCommand(char *pipetokens[], int pipecount, int pos)
 			close(1);
 			dup(pipes[1]);
 			close(pipes[0]);
-			//close(pipes[1]);
 
 			runCommand(pipetokens, pipecount, ++pos);
 		}
@@ -39,7 +31,6 @@ void runCommand(char *pipetokens[], int pipecount, int pos)
 		{
 			close(0);
 			dup(pipes[0]);
-			//close(pipes[0]);
 			close(pipes[1]);
 		}
 	}
