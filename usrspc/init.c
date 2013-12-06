@@ -1,3 +1,4 @@
+// Created By Joshua Clark
 #include <string.h>
 
 int pid, child, status;
