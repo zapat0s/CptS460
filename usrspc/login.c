@@ -28,7 +28,7 @@ int validate(char *username, char *password)
 	return -1;
 }
 
-main(int argc, char *argv[ ])
+void main(int argc, char *argv[ ])
 {
 	char *tty, *tok;
 	char buff[256];

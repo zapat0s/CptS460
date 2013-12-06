@@ -47,13 +47,10 @@ void main(int argc, char *argv[])
 
 	i = 0;
 	while(tok)
-	{
-		
+	{	
 		child = fork();
 		if(child == 0)
-		{
 			login(tok);
-		}
 
 		children[i] = child;
 		strcpy(childdevs[i], tok);
@@ -69,9 +66,7 @@ void main(int argc, char *argv[])
 		i = contains(children, 8, pid);
 
 		if(i != -1)
-		{
 			login(childdevs[i]);
-		}
 		else
 			printf("INIT: buried an orphan child %d\n", pid);
 	}
