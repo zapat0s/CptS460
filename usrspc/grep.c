@@ -39,13 +39,11 @@ int main(int argc, char *argv[ ])
 	if(argc > 1)
 		file = open(argv[1], READ);
 
-	getc();	
 	j = 0;
 	count = read(file, buff, 16);
 	buff[count] = '\0';
 	while(count)
 	{
-		getc();
 		i = 0;
 		while(i < count)
 		{
