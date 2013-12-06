@@ -7,15 +7,16 @@ int main(int argc, char *argv[ ])
 	char buff[17];
 
 	if(argc > 1)
-		file = open(argv[1]);
+		file = open(argv[1], O_RDONLY);
 	else
 		file = 0;
 
 	count = read(file, buff, 16);
+	buff[count] = '\0';
 	while(count)
 	{
 		printf(buff);
-		count = read(file, buff, count);
+		count = read(file, buff, 16);
 		buff[count] = '\0';
 	}
 

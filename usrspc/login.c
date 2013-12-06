@@ -56,7 +56,7 @@ void main(int argc, char *argv[ ])
 	signal(2, 1);
 
 	// Open login file
-	loginfile = open("/etc/passwd", READ);
+	loginfile = open("/etc/passwd", O_RDONLY);
 
 	read(loginfile, buff, 256);
 

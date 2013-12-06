@@ -8,19 +8,14 @@ int main(int argc, char *argv[ ])
 
 	if(argc > 2)
 	{
-		infile = open(argv[1], READ);
-		outfile = open(argv[2], WRITE);
+		infile = open(argv[1], O_RDONLY);
+		outfile = open(argv[2], O_WRONLY | O_CREAT);
 
 		if(infile == -1)
 		{
 			printf("%s doesnt exisit.\n", argv[1]);
 			return 1;
 		}		
-		if(outfile == -1)
-		{
-			creat(argv[2]);
-			outfile = open(argv[2], WRITE);
-		}
 	}
 	else
 	{

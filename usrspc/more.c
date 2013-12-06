@@ -1,9 +1,8 @@
 #include <string.h>
 #include "ucode.c"
 
-#define true 1
-#define false 0
-typedef bool;
+typedef int bool;
+enum { false, true };
 
 int end;
 
@@ -26,7 +25,6 @@ void printline(int fd)
 			printf("%c", buff[0]);
 		else if (buff[0] == '\n')
 		{
-			//printf("\n");
 			return;
 		}
 		count++;
@@ -56,7 +54,7 @@ int main(int argc, char *argv[ ])
 	end = false;
 
 	if(argc > 1)
-		file = open(argv[1], READ);
+		file = open(argv[1], O_RDONLY);
 	else
 		file = 0;
 	

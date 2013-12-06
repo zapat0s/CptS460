@@ -1,6 +1,7 @@
 #include <string.h>
 #include "ucode.c"
 
+// prints line if pattern is found.
 void findpattern(char* line, char* pattern)
 {
 	char tmp[128];
@@ -24,6 +25,7 @@ void findpattern(char* line, char* pattern)
 	j = 0;
 	while(j < i)
 	{
+		// If match found print line
 		if(!strcmp(tokens[j], pattern))
 			printf("%s\n", tmp);
 		j++;
@@ -37,7 +39,7 @@ int main(int argc, char *argv[ ])
 	char line[128];
 
 	if(argc > 1)
-		file = open(argv[1], READ);
+		file = open(argv[2], O_RDONLY);
 
 	j = 0;
 	count = read(file, buff, 16);
@@ -50,7 +52,7 @@ int main(int argc, char *argv[ ])
 			if(buff[i] == '\n')
 			{
 				line[j] = '\0';
-				findpattern(line, argv[2]);
+				findpattern(line, argv[1]);
 				j = 0;
 				i++;
 				

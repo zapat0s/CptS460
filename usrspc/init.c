@@ -35,11 +35,11 @@ void main(int argc, char *argv[])
 	char *tok;
 
 	// setup io
-	stdin = open("/dev/tty0", READ);
-	stdout = open("/dev/tty0", WRITE);
+	stdin = open("/dev/tty0", O_RDONLY);
+	stdout = open("/dev/tty0", O_WRONLY);
 	
 	// open list of devices
-	devicefd = open("/etc/init", READ);
+	devicefd = open("/etc/init", O_RDONLY);
 	read(devicefd, buff, 128);
 
 	// split list by line and start login processes
@@ -49,7 +49,7 @@ void main(int argc, char *argv[])
 	while(tok)
 	{	
 		child = fork();
-		if(child == 0)
+		if(child == 0) // If child
 			login(tok);
 
 		children[i] = child;
