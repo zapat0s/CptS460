@@ -33,7 +33,7 @@ void runCommand(char *pipetokens[], int pipecount, int pos)
 			close(pipes[0]);
 			//close(pipes[1]);
 
-			runCommand(pipetokens, pipecount, pos++);
+			runCommand(pipetokens, pipecount, ++pos);
 		}
 		else // parent
 		{

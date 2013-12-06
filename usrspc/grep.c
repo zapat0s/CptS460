@@ -38,8 +38,10 @@ int main(int argc, char *argv[ ])
 	char buff[17];
 	char line[128];
 
-	if(argc > 1)
+	if(argc > 2)
 		file = open(argv[2], O_RDONLY);
+	else
+		file = 0;
 
 	j = 0;
 	count = read(file, buff, 16);
